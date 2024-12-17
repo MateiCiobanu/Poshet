@@ -1,4 +1,5 @@
- #include "client.h"
+#include "client.h"
+#include "clientUI.h"
 
 
 int main(int argc, char *argv[])
