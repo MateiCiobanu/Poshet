@@ -1,8 +1,8 @@
 # Poshet
 
-Am folosit getmail6 pentru implementarea POP3.
-Am folosit mimetic pentru implementarea SMTP deoarece are si suport MIME, adica pentru atasamente.
-Pentru interfata grafica am folosit wxwidgets.
+<br> Am folosit getmail6 pentru implementarea POP3. </br>
+<br> Am folosit mimetic pentru implementarea SMTP deoarece are si suport MIME, adica pentru atasamente. </br>
+<br> Pentru interfata grafica am folosit wxwidgets. </br>
 
 
 # compilare fiecare server si client
@@ -13,6 +13,6 @@ Pentru interfata grafica am folosit wxwidgets.
 
 # rulare: 
 
-./serverPOP3
-./serverSMTP
-./client
+<br> ./serverPOP3 </br>
+<br> ./serverSMTP </br>
+<br> ./client </br>
