@@ -13,9 +13,11 @@
 #include <sqlite3.h>
 #include <queue>
 #include <condition_variable>
+#include <mimetic/mimetic.h>
 
 
 using namespace std;
+namespace mim = mimetic;
 
 #define SMTPPORT 8013
 #define POP3PORT 8014
@@ -31,9 +33,9 @@ condition_variable queueCondition;
 
 
 extern int errno;
-char POP3message[256];          //pentru fiecare mesaj pe care serverul il va trimite clientului dupa fiecare comanda
-char SMTPmessage[256];
-char CLIENTmessage[256];        //pentru fiecare mesaj pe care clientul il va trimite serverului
+char POP3message[1024];          //pentru fiecare mesaj pe care serverul il va trimite clientului dupa fiecare comanda
+char SMTPmessage[1024];
+char CLIENTmessage[1024];        //pentru fiecare mesaj pe care clientul il va trimite serverului
 int numberOfThreads = 10;
 pthread_mutex_t mutexLock = PTHREAD_MUTEX_INITIALIZER;  // variabila mutex ce va fi partajata de thread-uri
 mutex cout_mutex;                  // Mutex for console output
