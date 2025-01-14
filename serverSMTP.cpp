@@ -1,12 +1,13 @@
 #include "serverSMTP.h"
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) 
+{
     struct sockaddr_in server;
     struct sockaddr_in client;
     socklen_t clientLength = sizeof(client);
 
-    // 1. Create a socket
+    // creez un socket pentru IPv4, iar datele ajung in ordine, intr-un "stream de date"
     socketDescriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (socketDescriptor == -1) 
     {
@@ -14,35 +15,36 @@ int main(int argc, char *argv[]) {
         return errno;
     }
 
-    // Set socket to reuse address
+    // setez ca socket-ul sa fie reusable
     int on = 1;
     setsockopt(socketDescriptor, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    // 2. Prepare the socket structure
+    // populez structura de tip sockaddr_in, pentru IPv4, sa accepte orice adresa, si setez portul predefinit SMTPPORT
     bzero(&server, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(SMTPPORT);
 
-    // 3. Bind the socket
+    // atasez adresa locala (sockaddr_in server) socket-ului creat
     if (::bind(socketDescriptor, (struct sockaddr*)&server, sizeof(struct sockaddr)) == -1) {
         perror("[SMTP Server] says: Eroare la bind");
         return errno;
     }
 
-    // 4. Listen for clients
+    // ii permite socket-ului sa accepte conexiuni, maxim 5 conexiuni in coada  
     if (listen(socketDescriptor, 5) == -1) {
         perror("[SMTP Server] says: Eroare la listen");
         return errno;
     }
 
-    // 5. Create the thread pool
+    // crearea thread-urilor, si pentru fiecare apelez functia pthread_create
     threadsPool = new Thread[numberOfThreads];
     for (int i = 0; i < numberOfThreads; i++)
         pthread_create(&threadsPool[i].tid, NULL, &treat, (void*)(intptr_t)i);
 
-
     cout << "[SMTP Server] says: Astept la portul: " << SMTPPORT << endl;
+
+    // acum serverul accepta conexiuni, si pune fiecare socked descriptor(client) care se conecteaza intr-o coada de clienti
     while (true) 
     {
         int cd = accept(socketDescriptor, (struct sockaddr *)&client, &clientLength);
@@ -59,17 +61,18 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
+// functia pe care o dau ca argument atunci cand creez thread-urile 
 void* treat(void* arg) 
 {
     while (true) 
     {
-        int clientSocketDescriptor = dequeueClient();
+        int clientSocketDescriptor = dequeueClient();           // iau un client diin coada
 
         cout << "[SMTP Server] says: S-a connectat la server clientul: " << clientSocketDescriptor << endl;
         
+        // trimit un mesaj clientului ca am reusit sa fac conexiunea
         bzero(SMTPmessage, sizeof(SMTPmessage));
-        strcpy(SMTPmessage, "Conexiunea s-a stabilit cu succes!");
+        strcpy(SMTPmessage, "220 localhost SMTP Server Ready\r\n");
         if(write(clientSocketDescriptor, &SMTPmessage, sizeof(SMTPmessage)) < 0)
         {
             perror("[SMTP Thread] says: Eroare la trimiterea mesajului catre client dupa conectare");
@@ -87,7 +90,8 @@ void* treat(void* arg)
     return nullptr;
 }
 
-
+// manageClient gestioneaza logica pentru fiecare client in parte, in principiu primeste o comanda de la client cu receiveCommand
+// si ulterior gestioneaza aceasta comanda folosing addressCommand
 bool manageClient(int clientSocketDescriptor, intptr_t threadId)
 {
     CommandLine commandLine;
@@ -105,18 +109,21 @@ bool manageClient(int clientSocketDescriptor, intptr_t threadId)
 
 void enqueueClient(int clientSocketDescriptor)
 {
+    // folosesc un mutex ca sa ii adauge pe rand in coada 
     lock_guard<mutex> lock(queueMutex);
-    clientQueue.push(clientSocketDescriptor);
-    queueCondition.notify_one();
+    clientQueue.push(clientSocketDescriptor);       // adaug descriptorul in coada
+    queueCondition.notify_one();                    // notific un thread ca exista un client nou pe care il poate prelua 
 }
+
 
 int dequeueClient()
 {
+    // folosesc acelasi mutex ca sa ii scoata pe rand din coada 
     unique_lock<mutex> lock(queueMutex);
-    queueCondition.wait(lock, []{return !clientQueue.empty(); });
-    int cd = clientQueue.front();
-    clientQueue.pop();
-    return cd;
+    queueCondition.wait(lock, []{return !clientQueue.empty(); });       // astept pana cand apare un client
+    int cd = clientQueue.front();                                       // iau primul client din coada 
+    clientQueue.pop();                                                  // scot clientul din coada
+    return cd;                                                          // returnez socket descriptorul pentru client
 }
 
 
@@ -175,11 +182,14 @@ CommandLine lineParser(string line)
 
 bool receiveCommand(int clientSocketDescriptor, CommandLine &commandLine)
 {
-    char receivedCommandLine[1024];
+    // ar trebui sa il pun in teorie la loc 1024
+    char receivedCommandLine[65536];
     bzero(receivedCommandLine, sizeof(receivedCommandLine));
 
+
+    // citesc comanda de la client 
     int bytesRead = read(clientSocketDescriptor, receivedCommandLine, sizeof(receivedCommandLine));
-    if(bytesRead == 0)          // deonectare client
+    if(bytesRead == 0)          // deconectare client
     {
         cout << "[SMTP Thread] says: Clientul " << clientSocketDescriptor << " s-a deconectat fortat la citire." << endl;
         return false; 
@@ -192,10 +202,13 @@ bool receiveCommand(int clientSocketDescriptor, CommandLine &commandLine)
             perror("[SMTP Thread] says: Error la citirea mesajului de la client");
         return false;
     }
+
+    // dupa ce am citit comanda de la client, o trimit la lineParser ca sa o formatez
     commandLine = lineParser(receivedCommandLine);
     return true;
 }
 
+// nucleul serverului, aici dau handle fiecarei comenzi
 bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
 {
     string response;
@@ -216,7 +229,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
     }
     else if (commandLine.command == "HELO")
     {
-        response = "250 Hello, " + commandLine.content + "! The server is ready!\n";
+        response = "250 Hello " + commandLine.content + "\r\n";
         if (write(clientSocketDescriptor, response.c_str(),response.size()) <= 0) 
         {
             if(errno == ECONNRESET || errno == EPIPE)
@@ -230,6 +243,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
     }
     else if (commandLine.command == "MAIL FROM:")
     {
+
         CommandLine terminalCommandLine;
         terminalCommandLine.content = " \"From: ";
         terminalCommandLine.content = terminalCommandLine.content + commandLine.content + "\"";
@@ -245,7 +259,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
         else 
             cout << "[SMTP Thread] says: Comanda a fost executata cu succes in terminal" << endl;
 
-        response = terminalCommandLine.command;
+        response = (string)"250" + terminalCommandLine.command;
         if (write(clientSocketDescriptor, response.c_str(),response.size()) <= 0) 
         {
             if(errno == ECONNRESET || errno == EPIPE)
@@ -259,6 +273,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
     }
     else if (commandLine.command == "RCPT TO:")
     {
+
         CommandLine terminalCommandLine;
         terminalCommandLine.content = " \"To: ";
         terminalCommandLine.content = terminalCommandLine.content + commandLine.content + "\"";
@@ -274,7 +289,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
         else 
             cout << "[SMTP Thread] says: Comanda a fost executata cu succes in terminal" << endl;
 
-        response = terminalCommandLine.command;
+        response = (string)"250" + terminalCommandLine.command;
         if (write(clientSocketDescriptor, response.c_str(),response.size()) <= 0) 
         {
             if(errno == ECONNRESET || errno == EPIPE)
@@ -300,10 +315,12 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
         cout << "[SMTP Thread] says: Clientul a inceput sa scrie un mail " << endl;
 
         string emailBody;
-        char buffer[1024];
-        bool isReading = true;
+        char buffer[65536];             // ar trebui sa il pun la loc in teorie tot 1024
+        //bool isReading = true;
 
-        while (isReading) 
+        // functia asta mergea pentru cum a fost gandit initial programul, in care dadeam linie cu linie mailul si el il scria in .txt
+        // dar acum nu mai e vazul deoarece il ia pe tot deodata 
+        // versiune pentru interfata grafica:
         {
             bzero(buffer, sizeof(buffer));
             int bytesRead = read(clientSocketDescriptor, buffer, sizeof(buffer));
@@ -320,17 +337,55 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
             string line(buffer);
             line.erase(line.find_last_not_of("\r\n") + 1); // Remove CRLF
 
-            if (line == ".") 
-                isReading = false; 
-            else 
+            if (line[line.size()-1]  == '.') 
             {
-                if (!line.empty() && line[0] == '.') 
-                {
-                    line = line.substr(1); // Handle dot-stuffing
-                }
-                emailBody += line + "\n";
+                emailBody += line; 
+                cout << endl << "Am afisat buffer" << endl;
             }
         }
+
+        // versiunea pentru backupClient
+        // while (isReading) 
+        // {
+        //     // cout << "miau" << endl;
+        //     bzero(buffer, sizeof(buffer));
+        //     int bytesRead = read(clientSocketDescriptor, buffer, sizeof(buffer));
+        //     if (bytesRead <= 0) 
+        //     {
+        //         if (bytesRead == 0)
+        //             cout << "[SMTP Thread] says: Clientul " << clientSocketDescriptor << " s-a deconectat." << endl;
+        //         else
+        //             perror("[SMTP Thread] says: Error la citirea emailului de la client");
+        //         return false;
+        //     }
+
+            
+        //     buffer[bytesRead] = '\0'; // Null-terminate the buffer
+        //     string line(buffer);
+        //     // cout << "line cu enter:" << line;
+        //     // cout << "---------------------------------" << endl;
+        //     line.erase(line.find_last_not_of("\r\n") + 1); // Remove CRLF
+        //     // cout << "line fara enter:" << line;
+        //     // cout << "---------------------------------" << endl;
+
+        //     //verific ultimul caracter sa vad daca e un punct
+        //     // cout << "lungime line: " << line.size() << endl;
+        //     // cout << "Ultimul caracter din line: " << line[line.size()-1] << endl;
+
+        //     if (line == ".") 
+        //     {
+        //         isReading = false; 
+        //     }
+        //     else 
+        //     {
+        //         if (!line.empty() && line[0] == '.') 
+        //         {
+        //             line = line.substr(1); // Handle dot-stuffing
+        //         }
+        //         emailBody += line + "\n";
+        //     }
+        //     // cout << "am facut o bucla while!!!" << endl;
+        // }
 
         CommandLine terminalCommandLine;
         terminalCommandLine.content = "\"" + emailBody + "\"";
@@ -383,10 +438,7 @@ bool addressCommand(int clientSocketDescriptor, CommandLine &commandLine)
             return false;
         }
         cout << "[SMTP Thread] says: Comanda necunoscuta de la clientul (" << clientSocketDescriptor << "): " << commandLine.command << endl;
-
-        // commandLine.content.clear();
-        // commandLine.command.clear();
-
+        
         return true;
     }
 }
