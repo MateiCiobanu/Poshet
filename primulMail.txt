@@ -1,5 +1,15 @@
 From: ciobanu.matei@asii.ro
 To: ciobanu.matei@asii.ro
-Subject: sunt pe drumul cel bun!
-Ma culc la 3 diminieata tho...
+Subject: test RC
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=boundary123
 
+--boundary123
+Content-Type: text/plain; charset=UTF-8
+
+un test.
+
+--boundary123--
+.
+
+.

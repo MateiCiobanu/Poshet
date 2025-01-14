@@ -1,0 +1,66 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath} % For math formatting
+\usepackage{tikz}
+\title{Tema 1}
+\author{Matei Ciobanu}
+\date{November 2024}
+
+\begin{document}
+
+\maketitle
+
+\section*{Problema 1}
+Fie $G$ un graf cu $n$ noduri în care toate nodurile au grad par, adică $d_G(u_i)$ este par $\forall u_i \in V(G)$, $\forall i \in \{1, 2, \ldots, n\}$. Deoarece $G$ nu este neapărat un graf conex, putem spune că acesta este format din $K$ componente conexe, unde $K \geq 1$. Din teorema lui Euler rezultă că în fiecare componentă conexă formată din noduri de grad par există un ciclu eulerian. Vom demonstra că, în orice astfel de componentă conexă, $d_G^{-}(u_i) = d_G^{+}(u_i), \ \forall i \in \{1, 2, \ldots, n\}$, unde $d_G^{-}$ reprezintă gradul intern și $d_G^{+}$ gradul extern al unui nod.
+
+Orientăm muchiile în sensul parcurgerii ciclului eulerian. Pentru fiecare muchie $v_i v_j$, incrementăm atât $d_G^{-}(v_i)$, cât și $d_G^{+}(v_j)$. Datorită parității nodurilor din componentă, în parcurgerea ciclului, vom intra și vom ieși dintr-un nod $u_i$ de același număr de ori, mai exact de $d_G(u_i)/2$ ori. Cu alte cuvinte, numărul de muchii incidente spre $v_i$ este egal cu numărul de muchii incidente din $v_i$. Astfel:
+
+$$
+d_G^{-}(u_i) = d_G^{+}(u_i) = d_G(u_i)/2, \quad \forall i \in \{1, 2, \ldots, n\}.
+$$
+
+Datorită faptului că toate nodurile grafului au grad par, există posibilitatea existenței unor noduri izolate. Pentru nodurile izolate știm deja că $d_G(u_i) = 0, \forall i \in \{1, 2, \ldots, n\}$, deci acestea respectă proprietatea pe care dorim să o demonstrăm.
+
+
+\section*{Problema 2}
+
+\subsection*{Subpunctul a}  
+
+Presupunem prin reducere la absurd că $\exists \ xy \in E \setminus E'$ astfel încât $\forall \ x, y \in V(G)$, nici $x$ nu este ascendent al lui $y$ și nici $y$ nu este ascendent al lui $x$.
+
+Datorită proprietății de conexitate a grafului $G$, în urma parcurgerii DFS a grafului, arborele de parcurgere DFS, $T = (V, E')$, va conține toate nodurile din graf, deci orice muchie $xy \in V(G)$. Astfel există un drum ascendent de la $x$ la $y$, adică de la copil la strămoș. ($\exists$ un drum unic între două noduri ale arborelui.)
+
+\[
+\Rightarrow \text{Este obligatoriu să existe o relație de descendență în cadrul arborelui DFS între } x \text{ și } y
+\]
+
+\[
+\Rightarrow \text{Fie } x \text{ este strămoșul lui } y \text{ fie } y \text{ este strămoșul lui } x
+\]
+
+\[
+\Rightarrow \text{CONTRADICTIE} \Rightarrow \text{Presupunerea făcută inițial este falsă}
+\]
+
+Astfel, rezultă că $\forall$ $xy \in E \setminus E'$ este astfel încât $x$ este un ascendent (strămoș) al lui $y$ sau invers.
+
+\subsection*{Subpunctul c}
+Pentru orice muchie $uv \in E(G)$, $\exists$ un nod de nivel mai mare și unul de nivel mai mic. 
+
+\[
+\Rightarrow \text{fiecare muchie contribuie exact o dată la valoarea totală } \sum_{u \in V(G)} upd(u).
+\]
+
+Dacă $level(u) > level(v)$, atunci muchia $uv$ va fi inclusă în $upd(u)$, contribuind astfel o singură dată la suma $\sum_{u \in V(G)} upd(u)$, pentru fiecare $v \in N_G(u)$.
+
+Prin urmare, fiecare muchie contribuie exact o unitate la valoarea totală, ceea ce implică:
+
+\[
+\sum_{u \in V(G)} upd(u) = m.
+\]
+
+
+\subsection*{Subpunctul d} 
+Am demonstrat deja $upd(u) \leq level(u) $ la subpunctul b) și $\sum_{u \in V(G)} upd(u) = m$ la subpunctul c), $\ \forall \ u \in V(G)$.
+
+Deoarece $upd(u) \leq level(u), \ \forall \ u \in V(G)$, avem:
