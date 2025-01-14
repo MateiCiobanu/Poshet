@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-
+    // deschid baza de date 
     rc = sqlite3_open("ProiectRetele.db", &dataBase);
     if(rc < 0)
     {
@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in client;
     socklen_t clientLength = sizeof(client);
 
-    // 1. Create a socket
+    // creez un socket pentru IPv4, iar datele ajung in ordine, intr-un "stream de date"
     socketDescriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (socketDescriptor == -1) 
     {
@@ -36,35 +36,37 @@ int main(int argc, char *argv[])
         return errno;
     }
 
-    // Set socket to reuse address
+    // setez ca socket-ul sa fie reusable
     int on = 1;
     setsockopt(socketDescriptor, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    // 2. Prepare the socket structure
+    // populez structura de tip sockaddr_in, pentru IPv4, sa accepte orice adresa, si setez portul predefinit SMTPPORT
     bzero(&server, sizeof(server));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons(POP3PORT);
 
-    // 3. Bind the socket
+    // atasez adresa locala (sockaddr_in server) socket-ului creat
     if (::bind(socketDescriptor, (struct sockaddr*)&server, sizeof(struct sockaddr)) == -1) {
         perror("[POP3 Server] says: Eroare la bind");
         return errno;
     }
 
-    // 4. Listen for clients
+    // ii permite socket-ului sa accepte conexiuni, maxim 5 conexiuni in coada 
     if (listen(socketDescriptor, 5) == -1) {
         perror("[POP3 Server] says: Eroare la listen");
         return errno;
     }
 
-    // 5. Create the thread pool
+    // crearea thread-urilor, si pentru fiecare apelez functia pthread_create
     threadsPool = new Thread[numberOfThreads];
     for (int i = 0; i < numberOfThreads; i++)
         pthread_create(&threadsPool[i].tid, NULL, &treat, (void*)(intptr_t)i);
 
 
     cout << "[POP3 Server] says: Astept la portul: " << POP3PORT << endl;
+
+    // acum serverul accepta conexiuni, si pune fiecare socked descriptor(client) care se conecteaza intr-o coada de clienti
     while (true) 
     {
         int cd = accept(socketDescriptor, (struct sockaddr *)&client, &clientLength);
@@ -84,20 +86,23 @@ int main(int argc, char *argv[])
 
 void enqueueClient(int clientSocketDescriptor)
 {
+    // folosesc un mutex ca sa ii adauge pe rand in coada 
     lock_guard<mutex> lock(queueMutex);
-    clientQueue.push(clientSocketDescriptor);
-    queueCondition.notify_one();
+    clientQueue.push(clientSocketDescriptor);       // adaug descriptorul in coada
+    queueCondition.notify_one();                    // notific un thread ca exista un client nou pe care il poate prelua 
 }
 
 int dequeueClient()
 {
+    // folosesc acelasi mutex ca sa ii scoata pe rand din coada 
     unique_lock<mutex> lock(queueMutex);
-    queueCondition.wait(lock, []{return !clientQueue.empty(); });
-    int cd = clientQueue.front();
-    clientQueue.pop();
-    return cd;
+    queueCondition.wait(lock, []{return !clientQueue.empty(); });           // astept pana cand apare un client
+    int cd = clientQueue.front();                                           // iau primul client din coada 
+    clientQueue.pop();                                                      // scot clientul din coada
+    return cd;                                                              // returnez socket descriptorul pentru client
 }
 
+// functia pe care o dau ca argument atunci cand creez thread-urile 
 void* treat(void* arg) 
 {
     while (true) 
@@ -106,6 +111,7 @@ void* treat(void* arg)
 
         cout << "[POP3 Server] says: S-a connectat la server clientul: " << clientSocketDescriptor << endl;
         
+        // trimit un mesaj clientului ca am reusit sa fac conexiunea
         bzero(SMTPmessage, sizeof(SMTPmessage));
         strcpy(SMTPmessage, "+OK POP3 server ready \r\n");
         if(write(clientSocketDescriptor, &SMTPmessage, sizeof(SMTPmessage)) < 0)
@@ -150,7 +156,6 @@ CommandLine lineParser(string line)
 {
     string receivedCommand;
     string commandContent;
-
 
     if(line.find("QUIT") == 0)
     {
@@ -468,6 +473,7 @@ bool sendResponse(int clientSocketDescriptor, const string &response)
 
 bool USERCommandHandler(int clientSocketDescriptor, CommandLine &commandLine, string &response, User &currentEmailClientUser)
 {
+    cout << "AM PRIMIT USERUL: " << commandLine.content << "|" << endl;
     if(!checkUserInDatabase(dataBase, commandLine.content))
     {
         response = "-ERR user not found\n";
@@ -623,6 +629,9 @@ bool STATCommandHandler(int clientSocketDescriptor, CommandLine &commandLine, st
         fileContent << file.rdbuf();
         file.close();
 
+        cout << "AFISEZ FILE CONTENT: " << fileContent.str() << endl;
+        cout << "-------------------final fileContent------------------------------------" << endl;
+
         // ma ocup de MIME content
         string emailBody, sender, recipient, subject, date;
         vector<pair<string, string>> attachments;
@@ -631,6 +640,7 @@ bool STATCommandHandler(int clientSocketDescriptor, CommandLine &commandLine, st
             cout << "[POP3 Thread] says: Eroare la parsarea MIME pentru emailul " << mailPath.filename().string() << endl;
             return false;
         }
+        cout << "SUNT FIX INAINTE DE SaveEmail, dupa Parsare: emailbody= " << emailBody << endl;
         
         if(!checkEmailExistence(sender, recipient, subject, date))
         {
@@ -679,6 +689,11 @@ vector<string> getEmailsFromMaildir (string path)
 
 bool saveEmailToDatabase(const string &sender, const string &recipient, const string &subject, const string &date, const string &body, const vector<pair<string, string>> &attachments, User &currentEmailClientUser, const string &filename)
 {
+
+    cout << "SUNT IN SaveEmailToDataBase!!! dimensiunea body= " << body.size() << endl;
+    if (body.empty()) {
+        cout << "Error: Email body is empty. Check parsing." << endl;
+    }
 
     sqlite3_stmt *statement;
     string query = "INSERT INTO emails (sender, recipient, subject, date, body, filename) VALUES (?, ?, ?, ?, ?, ?)";
@@ -758,6 +773,8 @@ bool saveEmailToDatabase(const string &sender, const string &recipient, const st
 
 bool parseAttachments(const string &emailContent, string &emailBody, vector<pair<string, string>> &attachments, string &sender, string&recipient, string &subject, string &date)
 {
+    cout << "Raw email content in parseAttachments: " << emailContent << endl;
+
     //bool parsed = false;
     istringstream emailStream(emailContent);
     mim::MimeEntity mime(emailStream);                   // parsez continutul emailului
@@ -768,7 +785,8 @@ bool parseAttachments(const string &emailContent, string &emailBody, vector<pair
     date = mime.header().field("Date").value();     // extrag data
 
     // mailul are uneori si html si plain text asa ca incerc sa salvez doar una
-    string plainTextBody, htmlBody;
+    // fallbackBody este pentru atunci cand nu gaseste niciuna dintre primele 2 
+    string plainTextBody, htmlBody, fallbackBody;
 
     cout << " -------------------------------------------------------------------------------------------------- " << endl;
     cout << "Sender: " << sender << endl;
@@ -816,11 +834,19 @@ bool parseAttachments(const string &emailContent, string &emailBody, vector<pair
                 processPart(*part);
             }
         }
+        else
+        {
+            fallbackBody = mime.body();
+        }
     };
 
     processPart(mime);
 
-    emailBody = !htmlBody.empty() ? plainTextBody : htmlBody;
+    // emailBody = !htmlBody.empty() ? plainTextBody : htmlBody;
+    emailBody = !plainTextBody.empty() ? plainTextBody 
+           : !htmlBody.empty() ? htmlBody 
+           : !fallbackBody.empty() ? fallbackBody 
+           : "";
     cout << "EmailBody: " << emailBody << endl;
     cout << "Attachments: " << attachments.size() << endl;
     for (const auto &attachment : attachments)
