@@ -6,9 +6,9 @@ Pentru interfata grafica am folosit wxwidgets.
 
 
 # compilare fiecare server si client
-g++ -o serverPOP3 serverPOP3.cpp -pthread -lsqlite3 -std=c++17 -lmimetic
-g++ -o serverSMTP serverSMTP.cpp -pthread -lsqlite3 -std=c++17 -lmimetic
-g++ -std=c++17 -o client client.cpp $(wx-config --cxxflags --libs) -lsqlite3 -pthread
+<br> g++ -o serverPOP3 serverPOP3.cpp -pthread -lsqlite3 -std=c++17 -lmimetic </br>
+<br> g++ -o serverSMTP serverSMTP.cpp -pthread -lsqlite3 -std=c++17 -lmimetic </br>
+<br> g++ -std=c++17 -o client client.cpp $(wx-config --cxxflags --libs) -lsqlite3 -pthread </br>
 
 
 # rulare: 
